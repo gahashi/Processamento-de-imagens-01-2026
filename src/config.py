@@ -145,18 +145,24 @@ CONFIG_IMAGENS = [
 {
     "nome_arquivo": "1099.jpg",
     "nome_base": "1099",
-    "limiar_roi": 60,
-    "margem_roi": 75,
+    "limiar_roi": 0,
+    "margem_roi": 0,
     "classe_xml": None,
+    "ajuste_roi": {
+        "usar": True,
+        "centro_x": 959,
+        "centro_y": 539,
+        "raio_extra": 0
+    },
 
     "faixas_grao": [
         {
             "nome": "grao_laranja_1099",
             "h_min": 8,
             "h_max": 42,
-            "s_min": 55,
+            "s_min": 50,
             "s_max": 255,
-            "v_min": 55,
+            "v_min": 50,
             "v_max": 255
         }
     ],
@@ -173,29 +179,19 @@ CONFIG_IMAGENS = [
         }
     ],
 
-    "filtros": [
-        {
-            "tipo": "mediana",
-            "tamanho_kernel": 3
-        }
-    ],
+    "filtros": [],
 
     "frequencia": [],
 
     "superpixels": {
-        "num_superpixels": 250,
-        "m": 12,
-        "max_iter": 5,
-        "percentual_minimo": 0.10,
+        "num_superpixels": 700,
+        "m": 6,
+        "max_iter": 3,
+        "percentual_minimo": 0.05,
         "modo": "intersecao"
     },
 
     "morfologia": [
-        {
-            "tipo": "erosao",
-            "tamanho": 3,
-            "formato": "cruz"
-        },
         {
             "tipo": "fechamento",
             "tamanho": 3,
@@ -206,9 +202,10 @@ CONFIG_IMAGENS = [
     "pos_processamento": [
         {
             "tipo": "remover_componentes_pequenos",
-            "area_minima": 50
+            "area_minima": 80
         }
-    ]
+    ],
+
 }
     # {
     #     "nome_arquivo": "1099.jpg",

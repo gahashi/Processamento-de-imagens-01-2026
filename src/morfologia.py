@@ -8,6 +8,7 @@ def criar_elemento_estruturante(tamanho=3, formato="quadrado"):
     formato:
     - quadrado: todos os pixels do kernel valem 1
     - cruz: apenas centro, vertical e horizontal valem 1
+    - elipse: aproximação de uma elipse dentro do kernel
     """
 
     elemento = np.zeros((tamanho, tamanho), dtype=np.uint8)
@@ -22,11 +23,28 @@ def criar_elemento_estruturante(tamanho=3, formato="quadrado"):
             elemento[centro, i] = 1
             elemento[i, centro] = 1
 
+    elif formato == "elipse":
+        centro = tamanho // 2
+
+        raio_y = tamanho / 2
+        raio_x = tamanho / 2
+
+        for y in range(tamanho):
+            for x in range(tamanho):
+                dy = y - centro
+                dx = x - centro
+
+                valor = (dx * dx) / (raio_x * raio_x) + (dy * dy) / (raio_y * raio_y)
+
+                if valor <= 1:
+                    elemento[y, x] = 1
+
     else:
         print("Formato desconhecido. Usando quadrado.")
         elemento[:, :] = 1
 
     return elemento
+
 
 
 def criar_borda_zeros(img, tamanho_borda):
