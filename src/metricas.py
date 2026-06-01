@@ -167,4 +167,14 @@ def salvar_metricas(
             "pois as caixas do XML não representam exatamente o contorno real dos grãos.\n"
         )
 
-    return caminho_metricas
+    metricas = {
+        "caminho_metricas": caminho_metricas,
+        "total_detectado": total_detectado,
+        "total_anotado": total_anotado,
+        "erro_absoluto": erro_absoluto,
+        "erro_percentual": erro_percentual,
+        "iou": iou,
+        "dice": dice
+    }
+
+    return metricas

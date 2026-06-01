@@ -1,6 +1,7 @@
 import os
 import time
 from datetime import datetime
+import numpy as np
 
 from src.config import (
     PASTA_DATA,
@@ -11,7 +12,7 @@ from src.config import (
     FAIXAS_FUNDO
 )
 
-from src.utils import carregar_imagem, mostrar_imagem, salvar_imagem
+from src.utils import *
 from src.roi import detectar_roi_circular_por_limiar
 from src.filtros import aplicar_filtros
 from src.frequencia import aplicar_filtros_frequencia
@@ -20,9 +21,12 @@ from src.pre_processamento import (
     separar_canais_hsv,
     criar_mascara_objeto_por_faixas
 )
-from src.superpixels import aplicar_superpixels_na_roi
+from src.superpixels import (
+    aplicar_superpixels_na_roi,
+    segmentar_superpixels_por_otsu_hsv
+)
 from src.morfologia import aplicar_morfologia
-from src.pos_processamento import aplicar_pos_processamento
+from src.pos_processamento import aplicar_pos_processamento, contar_componentes
 from src.metricas import salvar_metricas
 from src.anotacoes import (
     ler_anotacoes_xml,
@@ -31,126 +35,30 @@ from src.anotacoes import (
     desenhar_bounding_boxes
 )
 
-
 # =========================
 # CORES DO TERMINAL
 # =========================
-COR_VERDE = "\033[92m"
-COR_AZUL = "\033[94m"
-COR_AMARELO = "\033[93m"
-COR_VERMELHO = "\033[91m"
-COR_RESET = "\033[0m"
+# COR_VERDE = "\033[92m"
+# COR_AZUL = "\033[94m"
+# COR_AMARELO = "\033[93m"
+# COR_VERMELHO = "\033[91m"
+# COR_RESET = "\033[0m"
 
 
-def imprimir_linha():
-    print(COR_AZUL + "-" * 70 + COR_RESET)
+# =========================
+# FUNÇÕES AUXILIARES DE DEBUG
+# =========================
 
 
-def imprimir_titulo(texto):
-    print()
-    imprimir_linha()
-    print(COR_VERDE + texto + COR_RESET)
-    imprimir_linha()
+# =========================
+# REGISTROS ACUMULADOS
+# =========================
 
-
-def imprimir_etapa(texto):
-    print(COR_AMARELO + "[ETAPA] " + texto + COR_RESET)
-
-
-def imprimir_tempo(nome_etapa, tempo_segundos):
-    print(COR_VERDE + "[OK] " + nome_etapa + " finalizada em " + str(round(tempo_segundos, 4)) + "s" + COR_RESET)
-
-
-def registrar_tempo(lista_tempos, nome_etapa, inicio):
-    tempo = time.perf_counter() - inicio
-
-    lista_tempos.append({
-        "etapa": nome_etapa,
-        "tempo_segundos": tempo
-    })
-
-    imprimir_tempo(nome_etapa, tempo)
-
-    return tempo
-
-
-def salvar_tempos_execucao(pasta_resultados, nome_base, id_execucao, tempos, tempo_total):
-    """
-    Salva o tempo de execução na pasta raiz da imagem.
-
-    Gera dois arquivos:
-    - registros_tempo_XXXX.txt
-    - registros_tempo_XXXX.csv
-
-    O CSV pode ser aberto no Excel.
-    """
-
-    pasta_raiz_imagem = os.path.join(
-        pasta_resultados,
-        nome_base
-    )
-
-    os.makedirs(pasta_raiz_imagem, exist_ok=True)
-
-    caminho_txt = os.path.join(
-        pasta_raiz_imagem,
-        "registros_tempo_" + nome_base + ".txt"
-    )
-
-    caminho_csv = os.path.join(
-        pasta_raiz_imagem,
-        "registros_tempo_" + nome_base + ".csv"
-    )
-
-    # =========================
-    # SALVA TXT
-    # =========================
-    with open(caminho_txt, "a", encoding="utf-8") as arquivo:
-        arquivo.write("=" * 70 + "\n")
-        arquivo.write("Imagem: " + nome_base + "\n")
-        arquivo.write("Execução: " + id_execucao + "\n")
-        arquivo.write("Tempo total: " + str(round(tempo_total, 4)) + "s\n")
-        arquivo.write("\n")
-        arquivo.write("Tempos por etapa:\n")
-
-        for item in tempos:
-            arquivo.write(
-                "- " + item["etapa"] + ": " + str(round(item["tempo_segundos"], 4)) + "s\n"
-            )
-
-        arquivo.write("\n")
-
-    # =========================
-    # SALVA CSV
-    # =========================
-    arquivo_existe = os.path.exists(caminho_csv)
-
-    with open(caminho_csv, "a", encoding="utf-8") as arquivo:
-        if not arquivo_existe:
-            arquivo.write("imagem;execucao;etapa;tempo_segundos\n")
-
-        arquivo.write(
-            nome_base + ";" +
-            id_execucao + ";" +
-            "TOTAL" + ";" +
-            str(round(tempo_total, 4)) + "\n"
-        )
-
-        for item in tempos:
-            arquivo.write(
-                nome_base + ";" +
-                id_execucao + ";" +
-                item["etapa"] + ";" +
-                str(round(item["tempo_segundos"], 4)) + "\n"
-            )
-
-    return caminho_txt, caminho_csv
 
 # =========================
 # EXECUÇÃO
 # =========================
 ID_EXECUCAO = "execucao_" + datetime.now().strftime("%Y%m%d_%H%M%S")
-
 
 for config_imagem in CONFIG_IMAGENS:
     tempo_inicio_imagem = time.perf_counter()
@@ -158,6 +66,7 @@ for config_imagem in CONFIG_IMAGENS:
 
     nome_arquivo = config_imagem["nome_arquivo"]
     nome_base = config_imagem["nome_base"]
+    area_minima_contagem = obter_area_minima_pos_processamento(config_imagem, valor_padrao=80)
 
     imprimir_titulo("PROCESSANDO IMAGEM " + nome_base)
 
@@ -174,6 +83,7 @@ for config_imagem in CONFIG_IMAGENS:
 
     print("Arquivo:", nome_arquivo)
     print("Resultados:", pasta_saida_imagem)
+    print("Área mínima de contagem:", area_minima_contagem)
 
     # =========================
     # LEITURA DA IMAGEM
@@ -246,6 +156,22 @@ for config_imagem in CONFIG_IMAGENS:
         margem=config_imagem["margem_roi"]
     )
 
+    ajuste_roi = config_imagem.get("ajuste_roi", {})
+
+    if ajuste_roi.get("usar", False):
+        centro_x = ajuste_roi.get("centro_x", centro_x)
+        centro_y = ajuste_roi.get("centro_y", centro_y)
+        raio_roi = raio_roi + ajuste_roi.get("raio_extra", 0)
+
+        img_roi, mascara_roi = criar_roi_circular_manual(
+            img,
+            centro_x,
+            centro_y,
+            raio_roi
+        )
+
+        print("ROI manual aplicada.")
+
     salvar_imagem(
         os.path.join(pasta_saida_imagem, "roi_" + nome_base + ".png"),
         img_roi
@@ -312,7 +238,11 @@ for config_imagem in CONFIG_IMAGENS:
 
     inicio = time.perf_counter()
 
-    img_hsv = converter_hsv(img_frequencia)
+    # A frequência é salva para análise, mas a segmentação por cor usa a ROI suavizada.
+    img_hsv = converter_hsv(img_roi_suavizada)
+
+    faixas_grao_imagem = config_imagem.get("faixas_grao", FAIXAS_GRAO)
+    faixas_fundo_imagem = config_imagem.get("faixas_fundo", FAIXAS_FUNDO)
 
     h, s, v = separar_canais_hsv(img_hsv)
 
@@ -340,10 +270,10 @@ for config_imagem in CONFIG_IMAGENS:
 
     inicio = time.perf_counter()
 
-    mascara_grao, mascaras_objeto, mascaras_fundo = criar_mascara_objeto_por_faixas(
+    mascara_grao_faixas, mascaras_objeto, mascaras_fundo = criar_mascara_objeto_por_faixas(
         img_hsv,
-        FAIXAS_GRAO,
-        FAIXAS_FUNDO
+        faixas_grao_imagem,
+        faixas_fundo_imagem
     )
 
     for nome_mascara, mascara in mascaras_objeto.items():
@@ -365,11 +295,42 @@ for config_imagem in CONFIG_IMAGENS:
         )
 
     salvar_imagem(
+        os.path.join(pasta_saida_imagem, "mascara_grao_faixas_" + nome_base + ".png"),
+        mascara_grao_faixas
+    )
+
+    mascara_grao, mascara_grao_h = aplicar_h_dominante_na_mascara(
+        img_hsv,
+        mascara_grao_faixas,
+        mascara_roi,
+        faixas_grao_imagem,
+        config_imagem
+    )
+
+    if mascara_grao_h is not None:
+        salvar_imagem(
+            os.path.join(pasta_saida_imagem, "mascara_grao_h_dominante_" + nome_base + ".png"),
+            mascara_grao_h
+        )
+
+    salvar_imagem(
         os.path.join(pasta_saida_imagem, "mascara_grao_inicial_" + nome_base + ".png"),
         mascara_grao
     )
 
     registrar_tempo(tempos_execucao, "Criação da máscara inicial do grão", inicio)
+
+    imprimir_componentes_mascara(
+        "Máscara por faixas HSV",
+        mascara_grao_faixas,
+        area_minima=area_minima_contagem
+    )
+
+    imprimir_componentes_mascara(
+        "Máscara HSV + H dominante",
+        mascara_grao,
+        area_minima=area_minima_contagem
+    )
 
     # =========================
     # SEGMENTAÇÃO POR SUPERPIXELS
@@ -381,7 +342,7 @@ for config_imagem in CONFIG_IMAGENS:
     config_superpixels = config_imagem["superpixels"]
 
     labels_superpixels, imagem_labels, bordas_superpixels, mascara_grao_superpixel = aplicar_superpixels_na_roi(
-        img_frequencia,
+        img_roi_suavizada,
         mascara_roi,
         mascara_grao,
         num_superpixels=config_superpixels["num_superpixels"],
@@ -389,6 +350,24 @@ for config_imagem in CONFIG_IMAGENS:
         max_iter=config_superpixels["max_iter"],
         percentual_minimo=config_superpixels["percentual_minimo"],
         modo=config_superpixels["modo"]
+    )
+
+    # Otsu por superpixel fica salvo apenas para comparação visual.
+    # Ele NÃO é usado como máscara final porque, nos testes, reduziu a contagem dos grãos.
+    mascara_grao_otsu_superpixel, limiar_otsu_superpixel = segmentar_superpixels_por_otsu_hsv(
+        labels_superpixels,
+        img_hsv,
+        mascara_roi,
+        s_min=50,
+        v_min=50,
+        percentual_minimo=0.08
+    )
+
+    print("Limiar Otsu por superpixel no canal H:", limiar_otsu_superpixel)
+
+    salvar_imagem(
+        os.path.join(pasta_saida_imagem, "mascara_grao_otsu_superpixel_" + nome_base + ".png"),
+        mascara_grao_otsu_superpixel
     )
 
     salvar_imagem(
@@ -408,6 +387,18 @@ for config_imagem in CONFIG_IMAGENS:
 
     registrar_tempo(tempos_execucao, "Segmentação por superpixels", inicio)
 
+    imprimir_componentes_mascara(
+        "Superpixel usando HSV/H manual",
+        mascara_grao_superpixel,
+        area_minima=area_minima_contagem
+    )
+
+    imprimir_componentes_mascara(
+        "Superpixel usando Otsu automático",
+        mascara_grao_otsu_superpixel,
+        area_minima=area_minima_contagem
+    )
+
     # =========================
     # MORFOLOGIA MATEMÁTICA
     # =========================
@@ -415,8 +406,12 @@ for config_imagem in CONFIG_IMAGENS:
 
     inicio = time.perf_counter()
 
+    # Usa a máscara refinada por superpixels, sem remover bordas.
+    # Remover bordas de superpixel quebrou os grãos e aumentou demais a contagem.
+    mascara_base_final = mascara_grao_superpixel
+
     mascara_grao_morfologia = aplicar_morfologia(
-        mascara_grao_superpixel,
+        mascara_base_final,
         config_imagem["morfologia"]
     )
 
@@ -426,6 +421,12 @@ for config_imagem in CONFIG_IMAGENS:
     )
 
     registrar_tempo(tempos_execucao, "Morfologia matemática", inicio)
+
+    imprimir_componentes_mascara(
+        "Depois da morfologia",
+        mascara_grao_morfologia,
+        area_minima=area_minima_contagem
+    )
 
     # =========================
     # PÓS-PROCESSAMENTO
@@ -444,7 +445,19 @@ for config_imagem in CONFIG_IMAGENS:
         mascara_grao_final
     )
 
+    mascara_grao_final_01 = (mascara_grao_final > 0).astype(np.uint8)
+    np.save(
+        os.path.join(pasta_saida_imagem, "mascara_grao_final_01_" + nome_base + ".npy"),
+        mascara_grao_final_01
+    )
+
     registrar_tempo(tempos_execucao, "Pós-processamento", inicio)
+
+    imprimir_componentes_mascara(
+        "Máscara final depois do pós-processamento",
+        mascara_grao_final,
+        area_minima=area_minima_contagem
+    )
 
     # =========================
     # MÉTRICAS
@@ -454,29 +467,43 @@ for config_imagem in CONFIG_IMAGENS:
     inicio = time.perf_counter()
 
     if mascara_bbox is not None:
-        caminho_metricas = salvar_metricas(
+        metricas = salvar_metricas(
             pasta_saida_imagem,
             nome_base,
             mascara_grao_final,
             mascara_referencia=mascara_bbox,
             anotacoes=anotacoes,
             classe_interesse=config_imagem["classe_xml"],
-            area_minima_contagem=300
+            area_minima_contagem=area_minima_contagem
         )
     else:
-        caminho_metricas = salvar_metricas(
+        metricas = salvar_metricas(
             pasta_saida_imagem,
             nome_base,
             mascara_grao_final,
             mascara_referencia=None,
             anotacoes=None,
             classe_interesse=None,
-            area_minima_contagem=300
+            area_minima_contagem=area_minima_contagem
         )
 
     registrar_tempo(tempos_execucao, "Cálculo das métricas", inicio)
 
-    print("Métricas salvas em:", caminho_metricas)
+    print("Métricas salvas em:", metricas)
+
+    salvar_registro_metricas(
+        PASTA_RESULTADOS,
+        nome_base,
+        ID_EXECUCAO,
+        metricas
+    )
+
+    salvar_registro_configuracao(
+        PASTA_RESULTADOS,
+        nome_base,
+        ID_EXECUCAO,
+        config_imagem
+    )
 
     # =========================
     # TEMPO TOTAL DA IMAGEM

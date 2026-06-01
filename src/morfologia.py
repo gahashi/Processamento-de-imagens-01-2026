@@ -1,5 +1,11 @@
 import numpy as np
 
+try:
+    from PIL import Image, ImageFilter
+except ModuleNotFoundError:
+    Image = None
+    ImageFilter = None
+
 
 def criar_elemento_estruturante(tamanho=3, formato="quadrado"):
     """
@@ -8,6 +14,7 @@ def criar_elemento_estruturante(tamanho=3, formato="quadrado"):
     formato:
     - quadrado: todos os pixels do kernel valem 1
     - cruz: apenas centro, vertical e horizontal valem 1
+    - elipse: aproximação de uma elipse dentro do kernel
     """
 
     elemento = np.zeros((tamanho, tamanho), dtype=np.uint8)
@@ -22,11 +29,28 @@ def criar_elemento_estruturante(tamanho=3, formato="quadrado"):
             elemento[centro, i] = 1
             elemento[i, centro] = 1
 
+    elif formato == "elipse":
+        centro = tamanho // 2
+
+        raio_y = tamanho / 2
+        raio_x = tamanho / 2
+
+        for y in range(tamanho):
+            for x in range(tamanho):
+                dy = y - centro
+                dx = x - centro
+
+                valor = (dx * dx) / (raio_x * raio_x) + (dy * dy) / (raio_y * raio_y)
+
+                if valor <= 1:
+                    elemento[y, x] = 1
+
     else:
         print("Formato desconhecido. Usando quadrado.")
         elemento[:, :] = 1
 
     return elemento
+
 
 
 def criar_borda_zeros(img, tamanho_borda):
@@ -58,8 +82,15 @@ def erosao(img, elemento):
     cobertos pelo elemento estruturante também forem brancos.
     """
 
-    altura, largura = img.shape
     tamanho = elemento.shape[0]
+
+    if Image is not None and np.all(elemento == 1):
+        return np.array(
+            Image.fromarray(img).filter(ImageFilter.MinFilter(tamanho)),
+            dtype=np.uint8
+        )
+
+    altura, largura = img.shape
     borda = tamanho // 2
 
     img_borda = criar_borda_zeros(img, borda)
@@ -93,8 +124,15 @@ def dilatacao(img, elemento):
     da região coincidir com o elemento estruturante.
     """
 
-    altura, largura = img.shape
     tamanho = elemento.shape[0]
+
+    if Image is not None and np.all(elemento == 1):
+        return np.array(
+            Image.fromarray(img).filter(ImageFilter.MaxFilter(tamanho)),
+            dtype=np.uint8
+        )
+
+    altura, largura = img.shape
     borda = tamanho // 2
 
     img_borda = criar_borda_zeros(img, borda)
