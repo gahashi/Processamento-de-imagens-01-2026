@@ -375,3 +375,204 @@ def aplicar_superpixels_na_roi(
     ).astype(np.uint8)
 
     return labels_completo, imagem_labels_completa, bordas_completa, mascara_refinada_completa
+
+def calcular_limiar_otsu_valores(valores):
+    """
+    Calcula o limiar de Otsu para uma lista de valores escalares.
+
+    Aqui não estamos aplicando Otsu pixel a pixel.
+    Estamos aplicando Otsu sobre uma característica média de cada superpixel.
+    """
+
+    valores = np.asarray(valores, dtype=np.float64)
+
+    if len(valores) == 0:
+        return 0
+
+    minimo = np.min(valores)
+    maximo = np.max(valores)
+
+    if maximo == minimo:
+        return minimo
+
+    # Normaliza os valores para faixa 0-255
+    valores_norm = ((valores - minimo) / (maximo - minimo)) * 255
+    valores_norm = valores_norm.astype(np.uint8)
+
+    hist = np.zeros(256, dtype=np.float64)
+
+    for valor in valores_norm:
+        hist[valor] += 1
+
+    total = len(valores_norm)
+
+    soma_total = 0.0
+    for i in range(256):
+        soma_total += i * hist[i]
+
+    soma_fundo = 0.0
+    peso_fundo = 0.0
+
+    maior_variancia = -1
+    melhor_limiar = 0
+
+    for t in range(256):
+        peso_fundo += hist[t]
+
+        if peso_fundo == 0:
+            continue
+
+        peso_objeto = total - peso_fundo
+
+        if peso_objeto == 0:
+            break
+
+        soma_fundo += t * hist[t]
+
+        media_fundo = soma_fundo / peso_fundo
+        media_objeto = (soma_total - soma_fundo) / peso_objeto
+
+        variancia_entre_classes = (
+            peso_fundo *
+            peso_objeto *
+            ((media_fundo - media_objeto) ** 2)
+        )
+
+        if variancia_entre_classes > maior_variancia:
+            maior_variancia = variancia_entre_classes
+            melhor_limiar = t
+
+    # Converte o limiar normalizado de volta para a escala original
+    limiar_original = minimo + (melhor_limiar / 255.0) * (maximo - minimo)
+
+    return limiar_original
+
+
+def segmentar_superpixels_por_otsu_h(labels, img_hsv, mascara_roi):
+    """
+    Segmenta os grãos usando Otsu por superpixel no canal H.
+
+    Para cada superpixel:
+    - calcula a média do canal H dentro da ROI
+    - aplica Otsu nas médias
+    - superpixels com H médio menor ou igual ao limiar são considerados grão
+
+    Essa lógica funciona bem quando o objeto é laranja/amarelo
+    e o fundo é azul/esverdeado, como na imagem 1099.
+    """
+
+    h = img_hsv[:, :, 0]
+
+    labels_unicos = np.unique(labels)
+
+    valores_h = []
+    labels_validos = []
+
+    for label in labels_unicos:
+        if label < 0:
+            continue
+
+        regiao = (labels == label) & (mascara_roi > 0)
+
+        total_pixels = np.sum(regiao)
+
+        if total_pixels == 0:
+            continue
+
+        media_h = np.mean(h[regiao])
+
+        valores_h.append(media_h)
+        labels_validos.append(label)
+
+    limiar_otsu = calcular_limiar_otsu_valores(valores_h)
+
+    mascara_saida = np.zeros_like(h, dtype=np.uint8)
+
+    for i in range(len(labels_validos)):
+        label = labels_validos[i]
+        media_h = valores_h[i]
+
+        regiao = (labels == label) & (mascara_roi > 0)
+
+        # Para a imagem 1099:
+        # grão laranja/amarelo tende a ter H menor
+        # fundo azul tende a ter H maior
+        if media_h <= limiar_otsu:
+            mascara_saida[regiao] = 255
+
+    return mascara_saida, limiar_otsu
+
+def segmentar_superpixels_por_otsu_hsv(
+    labels,
+    img_hsv,
+    mascara_roi,
+    s_min=60,
+    v_min=60,
+    percentual_minimo=0.15
+):
+    """
+    Segmenta grãos usando Otsu no canal H,
+    mas validando também saturação e brilho.
+
+    Regra por pixel:
+    - H <= limiar_otsu_h
+    - S > s_min
+    - V > v_min
+
+    Depois, cada superpixel é marcado como grão se tiver
+    uma proporção mínima de pixels classificados como laranja.
+    """
+
+    h = img_hsv[:, :, 0]
+    s = img_hsv[:, :, 1]
+    v = img_hsv[:, :, 2]
+
+    labels_unicos = np.unique(labels)
+
+    valores_h = []
+
+    # Coleta valores H apenas dentro da ROI
+    for label in labels_unicos:
+        if label < 0:
+            continue
+
+        regiao = (labels == label) & (mascara_roi > 0)
+
+        if np.sum(regiao) == 0:
+            continue
+
+        media_h = np.mean(h[regiao])
+        valores_h.append(media_h)
+
+    limiar_otsu_h = calcular_limiar_otsu_valores(valores_h)
+
+    # Máscara inicial automática por pixel
+    mascara_pixel_laranja = (
+        (h <= limiar_otsu_h) &
+        (s > s_min) &
+        (v > v_min) &
+        (mascara_roi > 0)
+    )
+
+    mascara_saida = np.zeros_like(h, dtype=np.uint8)
+
+    # Classifica por superpixel
+    for label in labels_unicos:
+        if label < 0:
+            continue
+
+        regiao = (labels == label) & (mascara_roi > 0)
+
+        total_pixels = np.sum(regiao)
+
+        if total_pixels == 0:
+            continue
+
+        pixels_laranja = np.sum(mascara_pixel_laranja[regiao])
+
+        proporcao = pixels_laranja / total_pixels
+
+        if proporcao >= percentual_minimo:
+            mascara_saida[regiao] = 255
+
+    return mascara_saida, limiar_otsu_h

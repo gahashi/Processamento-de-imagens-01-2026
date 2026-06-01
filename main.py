@@ -20,7 +20,11 @@ from src.pre_processamento import (
     separar_canais_hsv,
     criar_mascara_objeto_por_faixas
 )
-from src.superpixels import aplicar_superpixels_na_roi
+from src.superpixels import (
+    aplicar_superpixels_na_roi,
+    segmentar_superpixels_por_otsu_hsv
+)
+
 from src.morfologia import aplicar_morfologia
 from src.pos_processamento import aplicar_pos_processamento
 from src.metricas import salvar_metricas
@@ -73,6 +77,134 @@ def registrar_tempo(lista_tempos, nome_etapa, inicio):
 
     return tempo
 
+
+def valor_csv(valor):
+    """
+    Converte valores para escrita em CSV.
+    """
+
+    if valor is None:
+        return ""
+
+    return str(valor)
+
+
+def salvar_registro_metricas(
+    pasta_resultados,
+    nome_base,
+    id_execucao,
+    metricas
+):
+    """
+    Salva um registro acumulado das métricas na pasta raiz da imagem.
+    """
+
+    pasta_raiz_imagem = os.path.join(
+        pasta_resultados,
+        nome_base
+    )
+
+    os.makedirs(pasta_raiz_imagem, exist_ok=True)
+
+    caminho_csv = os.path.join(
+        pasta_raiz_imagem,
+        "registros_metricas_" + nome_base + ".csv"
+    )
+
+    arquivo_existe = os.path.exists(caminho_csv)
+
+    with open(caminho_csv, "a", encoding="utf-8") as arquivo:
+        if not arquivo_existe:
+            arquivo.write(
+                "imagem;execucao;total_detectado;total_anotado;"
+                "erro_absoluto;erro_percentual;iou;dice\n"
+            )
+
+        arquivo.write(
+            nome_base + ";" +
+            id_execucao + ";" +
+            valor_csv(metricas["total_detectado"]) + ";" +
+            valor_csv(metricas["total_anotado"]) + ";" +
+            valor_csv(metricas["erro_absoluto"]) + ";" +
+            valor_csv(round(metricas["erro_percentual"], 4) if metricas["erro_percentual"] is not None else None) + ";" +
+            valor_csv(round(metricas["iou"], 4) if metricas["iou"] is not None else None) + ";" +
+            valor_csv(round(metricas["dice"], 4) if metricas["dice"] is not None else None) + "\n"
+        )
+
+    return caminho_csv
+
+
+def salvar_registro_configuracao(
+    pasta_resultados,
+    nome_base,
+    id_execucao,
+    config_imagem
+):
+    """
+    Salva um registro acumulado com as configurações usadas em cada execução.
+    """
+
+    pasta_raiz_imagem = os.path.join(
+        pasta_resultados,
+        nome_base
+    )
+
+    os.makedirs(pasta_raiz_imagem, exist_ok=True)
+
+    caminho_csv = os.path.join(
+        pasta_raiz_imagem,
+        "registros_config_" + nome_base + ".csv"
+    )
+
+    arquivo_existe = os.path.exists(caminho_csv)
+
+    superpixels = config_imagem["superpixels"]
+
+    # pega apenas o primeiro filtro de frequência, se existir
+    if len(config_imagem["frequencia"]) > 0:
+        frequencia = config_imagem["frequencia"][0]
+    else:
+        frequencia = {
+            "tipo": "",
+            "raio": "",
+            "canal": ""
+        }
+
+    # pega apenas o primeiro pós-processamento, se existir
+    if len(config_imagem["pos_processamento"]) > 0:
+        pos = config_imagem["pos_processamento"][0]
+    else:
+        pos = {
+            "area_minima": ""
+        }
+
+    with open(caminho_csv, "a", encoding="utf-8") as arquivo:
+        if not arquivo_existe:
+            arquivo.write(
+                "imagem;execucao;limiar_roi;margem_roi;classe_xml;"
+                "freq_tipo;freq_raio;freq_canal;"
+                "num_superpixels;m;max_iter;percentual_minimo;modo;"
+                "area_minima_pos_processamento\n"
+            )
+
+        arquivo.write(
+            nome_base + ";" +
+            id_execucao + ";" +
+            valor_csv(config_imagem["limiar_roi"]) + ";" +
+            valor_csv(config_imagem["margem_roi"]) + ";" +
+            valor_csv(config_imagem["classe_xml"]) + ";" +
+            valor_csv(frequencia.get("tipo", "")) + ";" +
+            valor_csv(frequencia.get("raio", "")) + ";" +
+            valor_csv(frequencia.get("canal", "")) + ";" +
+            valor_csv(superpixels["num_superpixels"]) + ";" +
+            valor_csv(superpixels["m"]) + ";" +
+            valor_csv(superpixels["max_iter"]) + ";" +
+            valor_csv(superpixels["percentual_minimo"]) + ";" +
+            valor_csv(superpixels["modo"]) + ";" +
+            valor_csv(pos.get("area_minima", "")) + "\n"
+        )
+
+    return caminho_csv
 
 def salvar_tempos_execucao(pasta_resultados, nome_base, id_execucao, tempos, tempo_total):
     """
@@ -312,26 +444,15 @@ for config_imagem in CONFIG_IMAGENS:
 
     inicio = time.perf_counter()
 
-    img_hsv = converter_hsv(img_frequencia)
+    # Importante:
+    # A frequência é salva para análise, mas a segmentação por cor usa a ROI suavizada.
+    img_hsv = converter_hsv(img_roi_suavizada)
+
+    faixas_grao_imagem = config_imagem.get("faixas_grao", FAIXAS_GRAO)
+    faixas_fundo_imagem = config_imagem.get("faixas_fundo", FAIXAS_FUNDO)
 
     h, s, v = separar_canais_hsv(img_hsv)
 
-    salvar_imagem(
-        os.path.join(pasta_saida_imagem, "canal_h_" + nome_base + ".png"),
-        h
-    )
-
-    salvar_imagem(
-        os.path.join(pasta_saida_imagem, "canal_s_" + nome_base + ".png"),
-        s
-    )
-
-    salvar_imagem(
-        os.path.join(pasta_saida_imagem, "canal_v_" + nome_base + ".png"),
-        v
-    )
-
-    registrar_tempo(tempos_execucao, "Conversão HSV e separação dos canais", inicio)
 
     # =========================
     # MÁSCARA INICIAL DO GRÃO
@@ -342,9 +463,10 @@ for config_imagem in CONFIG_IMAGENS:
 
     mascara_grao, mascaras_objeto, mascaras_fundo = criar_mascara_objeto_por_faixas(
         img_hsv,
-        FAIXAS_GRAO,
-        FAIXAS_FUNDO
+        faixas_grao_imagem,
+        faixas_fundo_imagem
     )
+
 
     for nome_mascara, mascara in mascaras_objeto.items():
         salvar_imagem(
@@ -381,7 +503,7 @@ for config_imagem in CONFIG_IMAGENS:
     config_superpixels = config_imagem["superpixels"]
 
     labels_superpixels, imagem_labels, bordas_superpixels, mascara_grao_superpixel = aplicar_superpixels_na_roi(
-        img_frequencia,
+        img_roi_suavizada,
         mascara_roi,
         mascara_grao,
         num_superpixels=config_superpixels["num_superpixels"],
@@ -389,6 +511,22 @@ for config_imagem in CONFIG_IMAGENS:
         max_iter=config_superpixels["max_iter"],
         percentual_minimo=config_superpixels["percentual_minimo"],
         modo=config_superpixels["modo"]
+    )
+
+    mascara_grao_otsu_superpixel, limiar_otsu_superpixel = segmentar_superpixels_por_otsu_hsv(
+        labels_superpixels,
+        img_hsv,
+        mascara_roi,
+        s_min=50,
+        v_min=50,
+        percentual_minimo=0.08
+    )
+
+    print("Limiar Otsu por superpixel no canal H:", limiar_otsu_superpixel)
+
+    salvar_imagem(
+        os.path.join(pasta_saida_imagem, "mascara_grao_otsu_superpixel_" + nome_base + ".png"),
+        mascara_grao_otsu_superpixel
     )
 
     salvar_imagem(
@@ -416,7 +554,7 @@ for config_imagem in CONFIG_IMAGENS:
     inicio = time.perf_counter()
 
     mascara_grao_morfologia = aplicar_morfologia(
-        mascara_grao_superpixel,
+        mascara_grao_otsu_superpixel,
         config_imagem["morfologia"]
     )
 
