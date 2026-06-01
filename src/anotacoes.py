@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET
 import numpy as np
-import cv2
+from src import cv2_compat as cv2
 
 
 def ler_anotacoes_xml(caminho_xml):

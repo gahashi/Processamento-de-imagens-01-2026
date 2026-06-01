@@ -143,6 +143,65 @@ CONFIG_IMAGENS = [
     # ==========
 
 {
+    "nome_arquivo": "1027.jpg",
+    "nome_base": "1027",
+    "limiar_roi": 60,
+    "margem_roi": 75,
+    "classe_xml": None,
+
+    "faixas_grao": [
+        {
+            "nome": "corpo_grao_laranja_1027",
+            "h_min": 5,
+            "h_max": 35,
+            "s_min": 100,
+            "s_max": 255,
+            "v_min": 55,
+            "v_max": 255
+        }
+    ],
+
+    "faixas_fundo": None,
+
+    "filtros": [],
+    "frequencia": [],
+
+    "h_dominante_min": 5,
+    "h_dominante_max": 35,
+    "h_dominante_s_min": 100,
+    "h_dominante_v_min": 55,
+
+    "superpixels": {
+        "usar": False,
+        "num_superpixels": 0,
+        "m": 6,
+        "max_iter": 0,
+        "percentual_minimo": 0.05,
+        "modo": "intersecao"
+    },
+
+    "morfologia": [
+        {
+            "tipo": "abertura",
+            "tamanho": 7,
+            "formato": "quadrado"
+        },
+        {
+            "tipo": "fechamento",
+            "tamanho": 3,
+            "formato": "quadrado"
+        }
+    ],
+
+    "pos_processamento": [
+        {
+            "tipo": "remover_componentes_pequenos",
+            "area_minima": 120
+        }
+    ],
+},
+
+{
     "nome_arquivo": "1099.jpg",
     "nome_base": "1099",
     "limiar_roi": 0,
@@ -157,12 +216,12 @@ CONFIG_IMAGENS = [
 
     "faixas_grao": [
         {
-            "nome": "grao_laranja_1099",
-            "h_min": 8,
-            "h_max": 42,
-            "s_min": 50,
+            "nome": "corpo_grao_laranja_1099",
+            "h_min": 5,
+            "h_max": 35,
+            "s_min": 100,
             "s_max": 255,
-            "v_min": 50,
+            "v_min": 55,
             "v_max": 255
         }
     ],
@@ -183,29 +242,105 @@ CONFIG_IMAGENS = [
 
     "frequencia": [],
 
+    "h_dominante_min": 5,
+    "h_dominante_max": 35,
+    "h_dominante_s_min": 100,
+    "h_dominante_v_min": 55,
+
     "superpixels": {
-        "num_superpixels": 700,
+        "usar": False,
+        "num_superpixels": 0,
         "m": 6,
-        "max_iter": 3,
+        "max_iter": 0,
         "percentual_minimo": 0.05,
         "modo": "intersecao"
     },
 
     "morfologia": [
         {
+            "tipo": "abertura",
+            "tamanho": 7,
+            "formato": "quadrado"
+        },
+        {
             "tipo": "fechamento",
             "tamanho": 3,
-            "formato": "elipse"
+            "formato": "quadrado"
         }
     ],
 
     "pos_processamento": [
         {
             "tipo": "remover_componentes_pequenos",
-            "area_minima": 80
+            "area_minima": 120
         }
     ],
 
+},
+
+{
+    "nome_arquivo": "1207.jpg",
+    "nome_base": "1207",
+    "limiar_roi": 60,
+    "margem_roi": 75,
+    "classe_xml": None,
+
+    "faixas_grao": [
+        {
+            "nome": "corpo_grao_laranja_1207",
+            "h_min": 5,
+            "h_max": 35,
+            "s_min": 100,
+            "s_max": 255,
+            "v_min": 55,
+            "v_max": 255
+        }
+    ],
+
+    "faixas_fundo": None,
+
+    "filtros": [],
+    "frequencia": [],
+
+    "h_dominante_min": 5,
+    "h_dominante_max": 35,
+    "h_dominante_s_min": 100,
+    "h_dominante_v_min": 55,
+
+    "superpixels": {
+        "usar": False,
+        "num_superpixels": 0,
+        "m": 6,
+        "max_iter": 0,
+        "percentual_minimo": 0.05,
+        "modo": "intersecao"
+    },
+
+    "morfologia": [
+        {
+            "tipo": "abertura",
+            "tamanho": 7,
+            "formato": "quadrado"
+        },
+        {
+            "tipo": "fechamento",
+            "tamanho": 3,
+            "formato": "quadrado"
+        }
+    ],
+
+    "pos_processamento": [
+        {
+            "tipo": "remover_componentes_pequenos",
+            "area_minima": 120
+        },
+        {
+            "tipo": "separar_componentes_grandes_por_area",
+            "area_media_grao": 4050,
+            "area_minima": 120,
+            "iteracoes": 12
+        }
+    ],
 }
     # {
     #     "nome_arquivo": "1099.jpg",

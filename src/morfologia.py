@@ -1,5 +1,11 @@
 import numpy as np
 
+try:
+    from PIL import Image, ImageFilter
+except ModuleNotFoundError:
+    Image = None
+    ImageFilter = None
+
 
 def criar_elemento_estruturante(tamanho=3, formato="quadrado"):
     """
@@ -76,8 +82,15 @@ def erosao(img, elemento):
     cobertos pelo elemento estruturante também forem brancos.
     """
 
-    altura, largura = img.shape
     tamanho = elemento.shape[0]
+
+    if Image is not None and np.all(elemento == 1):
+        return np.array(
+            Image.fromarray(img).filter(ImageFilter.MinFilter(tamanho)),
+            dtype=np.uint8
+        )
+
+    altura, largura = img.shape
     borda = tamanho // 2
 
     img_borda = criar_borda_zeros(img, borda)
@@ -111,8 +124,15 @@ def dilatacao(img, elemento):
     da região coincidir com o elemento estruturante.
     """
 
-    altura, largura = img.shape
     tamanho = elemento.shape[0]
+
+    if Image is not None and np.all(elemento == 1):
+        return np.array(
+            Image.fromarray(img).filter(ImageFilter.MaxFilter(tamanho)),
+            dtype=np.uint8
+        )
+
+    altura, largura = img.shape
     borda = tamanho // 2
 
     img_borda = criar_borda_zeros(img, borda)

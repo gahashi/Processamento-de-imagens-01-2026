@@ -1,4 +1,4 @@
-import cv2
+from src import cv2_compat as cv2
 import numpy as np
 
 

@@ -328,6 +328,18 @@ def aplicar_superpixels_na_roi(
 
     altura, largura = mascara_inicial.shape
 
+    if num_superpixels <= 0 or max_iter <= 0:
+        labels_vazios = -np.ones((altura, largura), dtype=np.int32)
+        imagem_labels_vazia = np.zeros((altura, largura), dtype=np.uint8)
+        bordas_vazias = np.zeros((altura, largura), dtype=np.uint8)
+        mascara_refinada = np.where(
+            mascara_roi > 0,
+            mascara_inicial,
+            0
+        ).astype(np.uint8)
+
+        return labels_vazios, imagem_labels_vazia, bordas_vazias, mascara_refinada
+
     ymin, ymax, xmin, xmax = obter_limites_mascara(mascara_roi)
 
     img_recorte = img[ymin:ymax, xmin:xmax]

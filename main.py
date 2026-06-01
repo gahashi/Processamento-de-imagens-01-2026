@@ -445,6 +445,12 @@ for config_imagem in CONFIG_IMAGENS:
         mascara_grao_final
     )
 
+    mascara_grao_final_01 = (mascara_grao_final > 0).astype(np.uint8)
+    np.save(
+        os.path.join(pasta_saida_imagem, "mascara_grao_final_01_" + nome_base + ".npy"),
+        mascara_grao_final_01
+    )
+
     registrar_tempo(tempos_execucao, "Pós-processamento", inicio)
 
     imprimir_componentes_mascara(

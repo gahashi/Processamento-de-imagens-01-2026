@@ -1,5 +1,5 @@
 import os
-import cv2
+from src import cv2_compat as cv2
 import time
 import numpy as np
 from src.pos_processamento import  contar_componentes
